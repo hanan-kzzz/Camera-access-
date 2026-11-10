@@ -1,0 +1,5 @@
+# Local camera credentials and secret files
+camera_credentials.txt
+*.credentials
+.env
+.env.*
