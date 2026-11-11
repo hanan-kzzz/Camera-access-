@@ -1,5 +1,2 @@
-# Local camera credentials and secret files
+# Real credentials — never commit
 camera_credentials.txt
-*.credentials
-.env
-.env.*

@@ -1,85 +1,264 @@
-# CCTV Finder for Ubuntu
+# 📷 CCTV Auto-Finder (Advanced Mode)
 
-A lightweight Bash utility for Ubuntu that helps you identify devices on your own local network, check common web-interface ports, and open a possible CCTV camera or NVR login page in your browser.
+A fully automatic network scanner that discovers IP cameras and NVRs on your local network, checks web-interface ports, and opens login pages with your credentials pre-filled — **no manual selection needed**.
 
-## Features
+Works on **Windows**, **Ubuntu/Linux**, and **Termux (Android)**.
 
-- Detects the active network interface and local IPv4 subnet automatically.
-- Discovers responding devices on the detected local network using Nmap.
-- Lets you select a device to inspect.
-- Checks common web-interface ports: 80, 443, 8080, and 8443.
-- Displays possible HTTP/HTTPS login URLs.
-- Optionally opens the first detected URL using your default browser.
+---
 
-## Requirements
+## ✨ Features
 
-- Ubuntu or another Linux distribution with Bash.
-- nmap
-- iproute2 (provides the ip command)
-- xdg-utils (optional, for opening the browser automatically)
+- 🔍 **Fully automatic** — scans your entire LAN, finds all cameras, and opens every login page
+- 🔑 **Auto-login** — embeds your username & password into the URL so cameras log in instantly
+- 🎥 **RTSP detection** — finds video streams (port 554) with ready-to-use VLC URLs
+- 🛡️ **Smart filtering** — skips your own machine and gateway, only shows real devices
+- 📡 **Extended port scanning** — checks ports 80, 443, 554, 8080, 8443, and 37777 (Dahua)
+- 📱 **Cross-platform** — dedicated scripts for Windows, Ubuntu/Linux, and Termux (Android)
 
-## Installation
+---
 
-Install the required packages:
+## 🚀 Quick Start
 
-    sudo apt update
-    sudo apt install nmap iproute2 xdg-utils
+### Step 1: Clone the Repository
 
-Clone the repository:
+```bash
+git clone https://github.com/hanan-kzzz/Camera-access-.git
+cd Camera-access-
+```
 
-    git clone https://github.com/hanan-kzzz/Camera-access-.git
-    cd Camera-access-
+### Step 2: Set Up Credentials
 
-Make the script executable:
+Copy the example file and fill in your camera username and password:
 
-    chmod +x cctv_finder_ubuntu.sh
+```bash
+cp camera_credentials.example.txt camera_credentials.txt
+```
 
-## Usage
+Edit `camera_credentials.txt`:
 
-1. Connect your Ubuntu computer to the same LAN/Wi-Fi as the camera, where the camera is reachable.
-2. Run:
+```
+username=admin
+password=YourCameraPassword
+```
 
-       ./cctv_finder_ubuntu.sh
+> ⚠️ **Note:** `camera_credentials.txt` is git-ignored and will never be committed to the repo.
 
-3. Review the discovered IP addresses.
-4. Select the IP address belonging to your own camera or NVR.
-5. Review the open common web ports and possible browser URLs.
-6. If prompted, choose whether to open the first URL in your default browser.
-7. Sign in using your own authorized camera credentials.
+### Step 3: Run the Scanner
 
-If device discovery does not work, check that your computer and camera are on the same reachable network. Some NVRs use an isolated PoE network, and some cameras are only accessible through the NVR.
+Choose the right script for your platform:
 
-## Important limitations
+<details>
+<summary><b>🪟 Windows</b></summary>
 
-- This is a basic discovery helper, not a complete CCTV security scanner.
-- It checks only the four common web ports listed above. A camera may use a different port or may not provide a browser interface.
-- A detected open port does not prove that the service is vulnerable or insecure.
-- Device names and vendor details may not be available from a basic scan.
-- HTTPS devices may show a browser certificate warning if they use a locally issued certificate. Verify that the address belongs to your device before proceeding.
-- The script does not attempt passwords, bypass authentication, exploit devices, or modify camera settings.
+**Requirements:** Nmap installed and in PATH ([download here](https://nmap.org/download.html))
 
-## Authorized use
+**Option A** — Double-click:
+```
+cctv_finder_windows.bat
+```
 
-Use this tool only on networks and devices you own or are explicitly authorized to assess. Do not scan networks belonging to other people or organizations without permission.
+**Option B** — From PowerShell:
+```powershell
+powershell -ExecutionPolicy Bypass -File cctv_finder_windows.ps1
+```
+</details>
 
-## Troubleshooting
+<details>
+<summary><b>🐧 Ubuntu / Linux</b></summary>
 
-### nmap: command not found
+**Install dependencies:**
+```bash
+sudo apt update && sudo apt install nmap iproute2 xdg-utils
+```
 
-Install Nmap:
+**Run:**
+```bash
+chmod +x cctv_finder_ubuntu.sh
+./cctv_finder_ubuntu.sh
+```
+</details>
 
-    sudo apt update && sudo apt install nmap
+<details>
+<summary><b>📱 Termux (Android)</b></summary>
 
-### No devices are found
+**One-time setup** (installs nmap, net-tools, termux-api automatically):
+```bash
+chmod +x setup_termux.sh
+./setup_termux.sh
+```
 
-- Confirm that your computer and camera are connected to the same network.
-- Check whether the router or camera network isolates wireless clients.
-- If the camera is connected to an NVR's PoE ports, check the NVR's device list or documentation; the camera may not appear on your regular LAN.
+Or install manually:
+```bash
+pkg update && pkg install nmap net-tools termux-api
+```
 
-### No web login URL is found
+**Run:**
+```bash
+chmod +x cctv_finder_termux.sh
+./cctv_finder_termux.sh
+```
 
-The camera may use a non-standard port, have its web interface disabled, or require the manufacturer's app/NVR interface. Consult the device manufacturer's documentation.
+> 💡 **Tip:** Make sure your phone is connected to the **same Wi-Fi** network as your cameras.
 
-## License
+</details>
 
-No license has been specified yet. Unless a license is added, standard copyright applies and reuse or redistribution is not automatically permitted.
+---
+
+## ⚙️ How It Works
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Step 1: Network Discovery                          │
+│  Scans your entire LAN subnet using Nmap            │
+│  Skips your own device and the gateway               │
+├─────────────────────────────────────────────────────┤
+│  Step 2: Port Scanning                              │
+│  Checks each device for camera ports:               │
+│  80, 443, 554 (RTSP), 8080, 8443, 37777 (Dahua)    │
+├─────────────────────────────────────────────────────┤
+│  Step 3: Auto-Login                                 │
+│  Opens camera login pages in your browser with      │
+│  credentials embedded: http://user:pass@IP:port     │
+│  Lists RTSP streams for VLC playback                │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🖥️ Example Output
+
+```
+╔══════════════════════════════════════════════════════╗
+║       CCTV Auto-Finder  (Advanced Mode)             ║
+╚══════════════════════════════════════════════════════╝
+  Interface : Wi-Fi
+  Your IP   : 192.168.1.100
+  Network   : 192.168.1.0/24
+  Credentials loaded from camera_credentials.txt
+
+[1/3] Scanning network for devices...
+  Found 5 device(s):
+    - 192.168.1.10
+    - 192.168.1.20
+    - 192.168.1.30
+    - 192.168.1.50
+    - 192.168.1.64
+
+[2/3] Scanning for camera ports (80, 443, 554, 8080, 8443, 37777)...
+  Scanning 192.168.1.10 ... CAMERA FOUND (ports: 80, 554)
+  Scanning 192.168.1.20 ... CAMERA FOUND (ports: 80, 443)
+  Scanning 192.168.1.30 ... no camera ports
+  Scanning 192.168.1.50 ... no camera ports
+  Scanning 192.168.1.64 ... CAMERA FOUND (ports: 37777, 80)
+
+[3/3] Opening camera login pages with auto-credentials...
+
+  📷 Camera: 192.168.1.10
+    🌐 Web login  : http://192.168.1.10:80   →  credentials embedded
+    🎥 RTSP stream: rtsp://192.168.1.10:554
+
+  📷 Camera: 192.168.1.20
+    🌐 Web login  : http://192.168.1.20:80   →  credentials embedded
+    🔐 Web login  : https://192.168.1.20:443 →  credentials embedded
+
+  📷 Camera: 192.168.1.64
+    🌐 Web login  : http://192.168.1.64:80   →  credentials embedded
+
+Opening 4 camera login page(s) in your browser...
+
+🎥 RTSP streams (open with VLC):
+  rtsp://admin:admin@192.168.1.10:554/stream1
+
+═══════════════════════════════════════════════════════
+  Scan complete!
+  📷 Cameras found : 3
+  🌐 URLs opened   : 4
+  🎥 RTSP streams  : 1
+═══════════════════════════════════════════════════════
+```
+
+---
+
+## 🔑 How Auto-Login Works
+
+Credentials are embedded in the URL using the standard `http://user:pass@host:port` format.
+
+| Works Automatically ✅ | Needs Manual Login ⚠️ |
+|------------------------|----------------------|
+| HTTP Basic Auth cameras | Custom HTML login forms |
+| Hikvision, Dahua, Reolink | Some newer web UIs |
+| Amcrest, Foscam, TP-Link | Cloud-based cameras |
+| Most NVR/DVR web panels | Two-factor auth cameras |
+
+For cameras with custom login forms, the browser opens the page and your credentials are saved in `camera_credentials.txt` for easy copy-paste.
+
+---
+
+## 📁 Project Files
+
+| File | Platform | Description |
+|------|----------|-------------|
+| `cctv_finder_windows.ps1` | 🪟 Windows | Main PowerShell scanner script |
+| `cctv_finder_windows.bat` | 🪟 Windows | Double-click launcher for the PS1 script |
+| `cctv_finder_ubuntu.sh` | 🐧 Ubuntu/Linux | Main Bash scanner script |
+| `cctv_finder_termux.sh` | 📱 Android | Termux-optimized scanner with Android-specific features |
+| `setup_termux.sh` | 📱 Android | One-time setup script (installs all dependencies) |
+| `camera_credentials.txt` | All | Your credentials — **git-ignored**, never committed |
+| `camera_credentials.example.txt` | All | Template file — copy to `camera_credentials.txt` |
+
+---
+
+## 📱 Termux-Specific Features
+
+The Termux script is specially built for Android with:
+
+- 📦 **Auto-installs dependencies** — detects missing packages and installs via `pkg`
+- 📶 **Multiple network detection** — tries `ip` → `ifconfig` → `getprop` → manual input
+- 🌐 **Android browser opening** — uses `termux-open-url` → `am start` → `xdg-open`
+- 📡 **Wi-Fi aware** — defaults to `wlan0` interface (Android standard)
+- 🎨 **Colored output** — emoji + ANSI colors for easy reading on small screens
+- ✏️ **Auto-creates credentials** — generates `camera_credentials.txt` if missing
+
+---
+
+## 📋 Requirements Summary
+
+| Platform | Required | Optional |
+|----------|----------|----------|
+| 🪟 Windows | PowerShell 5+, [Nmap](https://nmap.org/download.html) | — |
+| 🐧 Ubuntu/Linux | `bash`, `nmap`, `iproute2` | `xdg-utils` (auto-open browser) |
+| 📱 Termux | `nmap`, `net-tools` | `termux-api` (auto-open browser) |
+
+---
+
+## 🔒 Security Notes
+
+- `camera_credentials.txt` is in `.gitignore` — it will **never** be committed
+- Credentials in URLs may appear in browser history — clear history if needed
+- Special characters in passwords are URL-encoded automatically
+- This tool is intended for accessing **your own** cameras on **your own** network
+
+---
+
+## 🎥 Playing RTSP Streams
+
+The scanner detects RTSP streams on port 554. To watch them:
+
+**Desktop (VLC):**
+```bash
+vlc rtsp://admin:password@192.168.1.10:554/stream1
+```
+
+**Termux:**
+```bash
+pkg install vlc
+cvlc rtsp://admin:password@192.168.1.10:554/stream1
+```
+
+**Android:** Open the RTSP URL in [VLC for Android](https://play.google.com/store/apps/details?id=org.videolan.vlc)
+
+---
+
+## 📜 License
+
+This project is for **personal and educational use only**. Only use it on networks and devices you own or have explicit authorization to access.
