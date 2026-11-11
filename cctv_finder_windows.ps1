@@ -52,7 +52,7 @@ $ip      = [System.Net.IPAddress]::Parse($ipInfo.IPAddress)
 $prefix  = [int]$ipInfo.PrefixLength
 $ipBytes = $ip.GetAddressBytes()
 [uint32]$ipNum   = ([uint32]$ipBytes[0] -shl 24) -bor ([uint32]$ipBytes[1] -shl 16) -bor ([uint32]$ipBytes[2] -shl 8) -bor [uint32]$ipBytes[3]
-[uint32]$mask    = if ($prefix -eq 0) { 0 } else { [uint32]([uint64]0xFFFFFFFF -shl (32 - $prefix)) }
+[uint32]$mask    = if ($prefix -eq 0) { [uint32]0 } elseif ($prefix -ge 32) { [uint32]::MaxValue } else { [uint32]::MaxValue -shl (32 - $prefix) }
 [uint32]$network = $ipNum -band $mask
 $netBytes = [byte[]]@(
     [byte](($network -shr 24) -band 255),
