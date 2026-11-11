@@ -105,7 +105,17 @@ foreach ($line in $nmapOutput) {
 $hosts = @($hosts | Select-Object -Unique)
 
 if ($hosts.Count -eq 0) {
-    Write-Host "  X No devices found on the network." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "╔══════════════════════════════════════════════════════════╗" -ForegroundColor Red
+    Write-Host "║  [!] NO OTHER DEVICES DETECTED ON THIS WI-FI            ║" -ForegroundColor Red
+    Write-Host "╚══════════════════════════════════════════════════════════╝" -ForegroundColor Red
+    Write-Host "  No responding devices found on subnet: $subnet" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  Troubleshooting:" -ForegroundColor Cyan
+    Write-Host "  1. Make sure your computer is on the same Wi-Fi as your camera."
+    Write-Host "  2. If your router has 'AP Isolation' or 'Guest Mode' enabled, disable it."
+    Write-Host "  3. Check if the camera is powered on and connected."
+    Write-Host ""
     Read-Host "Press Enter to exit"
     exit 0
 }
@@ -145,7 +155,19 @@ foreach ($h in $hosts) {
 Write-Host ""
 
 if ($cameras.Count -eq 0) {
-    Write-Host "  No devices with camera ports found." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "╔══════════════════════════════════════════════════════════╗" -ForegroundColor Red
+    Write-Host "║  [X] NO CAMERAS FOUND ON THIS WI-FI NETWORK             ║" -ForegroundColor Red
+    Write-Host "╚══════════════════════════════════════════════════════════╝" -ForegroundColor Red
+    Write-Host "  Scanned $($hosts.Count) device(s) on your Wi-Fi, but none of them" -ForegroundColor Yellow
+    Write-Host "  have open CCTV / camera web ports (80, 443, 554, 8080, 8443, 37777)." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  Possible reasons:" -ForegroundColor Cyan
+    Write-Host "  1. Camera is connected to a different Wi-Fi network or frequency (2.4 GHz vs 5 GHz)."
+    Write-Host "  2. Camera is plugged into an isolated PoE NVR port."
+    Write-Host "  3. Camera is offline or using non-standard ports."
+    Write-Host "  4. Router has client isolation enabled (blocking device-to-device traffic)."
+    Write-Host ""
     Read-Host "Press Enter to exit"
     exit 0
 }

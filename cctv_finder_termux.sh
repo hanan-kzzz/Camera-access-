@@ -170,8 +170,17 @@ for h in "${RAW_HOSTS[@]}"; do
 done
 
 if (( ${#HOSTS[@]} == 0 )); then
-    echo -e "${RED}  ✗ No devices found on the network.${NC}"
-    echo "  Make sure you're on the same Wi-Fi as your cameras."
+    echo ""
+    echo -e "${RED}╔══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║  [!] NO OTHER DEVICES DETECTED ON THIS WI-FI            ║${NC}"
+    echo -e "${RED}╚══════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${YELLOW}  No responding devices found on subnet: $CIDR${NC}"
+    echo ""
+    echo -e "${CYAN}  Troubleshooting:${NC}"
+    echo "  1. Make sure your phone is connected to the same Wi-Fi as your camera."
+    echo "  2. If using mobile hotspot or guest Wi-Fi, connect to your main home Wi-Fi."
+    echo "  3. Check if your camera is powered on and connected."
+    echo ""
     exit 0
 fi
 
@@ -210,7 +219,19 @@ done
 echo ""
 
 if (( ${#CAMERA_LIST[@]} == 0 )); then
-    echo -e "${RED}  No devices with camera ports found.${NC}"
+    echo ""
+    echo -e "${RED}╔══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║  [X] NO CAMERAS FOUND ON THIS WI-FI NETWORK             ║${NC}"
+    echo -e "${RED}╚══════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${YELLOW}  Scanned ${#HOSTS[@]} device(s) on your Wi-Fi, but none of them${NC}"
+    echo -e "${YELLOW}  have open CCTV / camera web ports (80, 443, 554, 8080, 8443, 37777).${NC}"
+    echo ""
+    echo -e "${CYAN}  Possible reasons:${NC}"
+    echo "  1. Camera is connected to a different Wi-Fi network or frequency (2.4 GHz vs 5 GHz)."
+    echo "  2. Camera is plugged into an isolated PoE NVR port."
+    echo "  3. Camera is offline or using non-standard ports."
+    echo "  4. Router has client isolation enabled (blocking phone-to-camera traffic)."
+    echo ""
     exit 0
 fi
 
