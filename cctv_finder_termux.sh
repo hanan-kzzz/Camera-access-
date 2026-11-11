@@ -1,10 +1,14 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Advanced CCTV Finder for Termux (Android)
-# Discovers ALL cameras on your LAN, checks web ports, and opens login pages
-# with credentials auto-embedded in the URL.
-set -Eeuo pipefail
+# ═══════════════════════════════════════════════════════════════════
+#  CCTV Auto-Finder for Termux (Advanced Mode)
+#  • Scans network for devices
+#  • Finds open camera ports
+#  • Tests multiple username:password credentials
+#  • Opens working login in browser
+# ═══════════════════════════════════════════════════════════════════
+set -Euo pipefail
 
-# ─── Colors ───────────────────────────────────────────────────────────
+# ─── Colors ───────────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -12,52 +16,46 @@ CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 GRAY='\033[1;30m'
 BOLD='\033[1m'
+WHITE='\033[1;37m'
 NC='\033[0m'
 
-# ─── Load Credentials ────────────────────────────────────────────────
+# ─── Load Credential Pairs ───────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CRED_FILE="$SCRIPT_DIR/camera_credentials.txt"
 if [[ ! -f "$CRED_FILE" ]]; then
     echo -e "${RED}Credentials file not found: $CRED_FILE${NC}"
     echo ""
-    echo "Create it now? A template will be generated."
-    read -r -p "Create camera_credentials.txt? [Y/n] " CREATE
-    if [[ ! "$CREATE" =~ ^[Nn]$ ]]; then
-        cat > "$CRED_FILE" << 'CRED_EOF'
-# Camera Credentials
-# Fill in your camera username and password below.
+    echo "Creating default credential list..."
+    cat > "$CRED_FILE" << 'CRED_EOF'
+# Camera Credentials List
+# Add multiple username:password pairs, one per line.
+# Format:  username:password
 
-username=admin
-password=admin
+admin:admin
+admin:12345
+admin:password
+admin:123456
+root:root
+root:admin
+admin:
+admin:888888
 CRED_EOF
-        echo -e "${GREEN}Created $CRED_FILE with default admin/admin${NC}"
-        echo -e "${YELLOW}Edit it with: nano $CRED_FILE${NC}"
-        echo ""
-    else
-        echo "Create camera_credentials.txt with:"
-        echo "  username=YOUR_CAMERA_USERNAME"
-        echo "  password=YOUR_CAMERA_PASSWORD"
-        exit 1
-    fi
+    echo -e "${GREEN}Created $CRED_FILE with common defaults${NC}"
 fi
 
-CAM_USER=""
-CAM_PASS=""
-while IFS='=' read -r key value; do
-    key="$(echo "$key" | xargs 2>/dev/null || echo "$key")"
-    value="$(echo "$value" | xargs 2>/dev/null || echo "$value")"
-    [[ -z "$key" || "$key" == \#* ]] && continue
-    case "$key" in
-        username) CAM_USER="$value" ;;
-        password) CAM_PASS="$value" ;;
-    esac
+CRED_PAIRS=()
+while IFS= read -r line; do
+    line="$(echo "$line" | xargs 2>/dev/null || echo "$line")"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    CRED_PAIRS+=("$line")
 done < "$CRED_FILE"
-if [[ -z "$CAM_USER" || -z "$CAM_PASS" ]]; then
-    echo -e "${RED}Invalid credentials file. Ensure it contains username=... and password=...${NC}"
+
+if (( ${#CRED_PAIRS[@]} == 0 )); then
+    echo -e "${RED}No credentials found in $CRED_FILE${NC}"
     exit 1
 fi
 
-# ─── URL-encode function ─────────────────────────────────────────────
+# ─── URL-encode ───────────────────────────────────────────────────
 urlencode() {
     local string="$1" length="${#1}" i c
     for (( i = 0; i < length; i++ )); do
@@ -68,46 +66,26 @@ urlencode() {
         esac
     done
 }
-ENC_USER="$(urlencode "$CAM_USER")"
-ENC_PASS="$(urlencode "$CAM_PASS")"
 
-# ─── Check & Install Dependencies ────────────────────────────────────
+# ─── Check & Install Dependencies ────────────────────────────────
 echo -e "${CYAN}Checking dependencies...${NC}"
 MISSING=()
-if ! command -v nmap >/dev/null 2>&1; then MISSING+=("nmap"); fi
+command -v nmap >/dev/null 2>&1 || MISSING+=("nmap")
+command -v curl >/dev/null 2>&1 || MISSING+=("curl")
 if ! command -v ifconfig >/dev/null 2>&1 && ! command -v ip >/dev/null 2>&1; then
     MISSING+=("net-tools")
 fi
 
 if (( ${#MISSING[@]} > 0 )); then
-    echo -e "${YELLOW}Missing packages: ${MISSING[*]}${NC}"
-    echo "Installing..."
+    echo -e "${YELLOW}Installing missing: ${MISSING[*]}${NC}"
     pkg update -y 2>/dev/null && pkg install -y "${MISSING[@]}" 2>/dev/null
-    if [[ $? -ne 0 ]]; then
-        echo -e "${RED}Failed to install. Run manually:${NC}"
-        echo "  pkg update && pkg install ${MISSING[*]}"
-        exit 1
-    fi
-    echo -e "${GREEN}Dependencies installed!${NC}"
 fi
 
-# Check for termux-open-url (from termux-api)
-HAS_OPEN=false
-if command -v termux-open-url >/dev/null 2>&1; then
-    HAS_OPEN=true
-elif command -v xdg-open >/dev/null 2>&1; then
-    HAS_OPEN=true
-elif command -v am >/dev/null 2>&1; then
-    # Android 'am' command as fallback
-    HAS_OPEN=true
-fi
-
-# ─── Detect Network ──────────────────────────────────────────────────
+# ─── Detect Network ──────────────────────────────────────────────
 MY_IP=""
 CIDR=""
 IFACE=""
 
-# Method 1: ip command (if iproute2 is installed)
 if command -v ip >/dev/null 2>&1; then
     IFACE="$(ip route 2>/dev/null | awk '/default/ {print $5; exit}')"
     if [[ -n "$IFACE" ]]; then
@@ -116,65 +94,33 @@ if command -v ip >/dev/null 2>&1; then
     fi
 fi
 
-# Method 2: ifconfig fallback (net-tools)
 if [[ -z "$MY_IP" ]] && command -v ifconfig >/dev/null 2>&1; then
-    # Try wlan0 first (Wi-Fi on Android), then any interface with an IP
     for iface in wlan0 eth0 wlan1; do
         local_ip="$(ifconfig "$iface" 2>/dev/null | grep 'inet ' | awk '{print $2}' | sed 's/addr://')"
         if [[ -n "$local_ip" && "$local_ip" != "127.0.0.1" ]]; then
             MY_IP="$local_ip"
             IFACE="$iface"
-            # Assume /24 subnet if we can't determine prefix
             CIDR="${MY_IP}/24"
             break
         fi
     done
 fi
 
-# Method 3: Parse /proc/net/route + getprop
 if [[ -z "$MY_IP" ]]; then
-    # Try Android getprop for Wi-Fi
-    if command -v getprop >/dev/null 2>&1; then
-        MY_IP="$(getprop dhcp.wlan0.ipaddress 2>/dev/null || echo "")"
-        if [[ -n "$MY_IP" ]]; then
-            IFACE="wlan0"
-            CIDR="${MY_IP}/24"
-        fi
-    fi
-fi
-
-if [[ -z "$MY_IP" || -z "$CIDR" ]]; then
-    echo -e "${RED}Could not detect your network.${NC}"
-    echo "Make sure you are connected to Wi-Fi."
-    echo ""
-    read -r -p "Enter your phone's IP address manually (e.g. 192.168.1.100): " MY_IP
+    echo -e "${YELLOW}Could not detect network automatically.${NC}"
+    read -r -p "Enter your phone's IP address (e.g. 192.168.1.100): " MY_IP
     if [[ -z "$MY_IP" ]]; then exit 1; fi
     CIDR="${MY_IP}/24"
     IFACE="manual"
 fi
 
-# Calculate gateway (assume .1 if we can't find it)
 GW_IP=""
 if command -v ip >/dev/null 2>&1; then
     GW_IP="$(ip route 2>/dev/null | awk '/default/ {print $3; exit}')"
 fi
-if [[ -z "$GW_IP" ]]; then
-    GW_IP="$(echo "$MY_IP" | awk -F. '{print $1"."$2"."$3".1"}')"
-fi
+[[ -z "$GW_IP" ]] && GW_IP="$(echo "$MY_IP" | awk -F. '{print $1"."$2"."$3".1"}')"
 
-# ─── Banner ───────────────────────────────────────────────────────────
-echo ""
-echo -e "${CYAN}╔══════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║     ${BOLD}CCTV Auto-Finder — Termux (Advanced)${NC}${CYAN}          ║${NC}"
-echo -e "${CYAN}╚══════════════════════════════════════════════════════╝${NC}"
-echo -e "  Interface : ${BOLD}$IFACE${NC}"
-echo -e "  Your IP   : ${BOLD}$MY_IP${NC}"
-echo -e "  Network   : ${BOLD}$CIDR${NC}"
-echo -e "  Gateway   : ${BOLD}$GW_IP${NC}"
-echo -e "  Creds     : ${GREEN}loaded from camera_credentials.txt${NC}"
-echo ""
-
-# ─── Open URL helper ─────────────────────────────────────────────────
+# ─── Open URL helper ─────────────────────────────────────────────
 open_url() {
     local url="$1"
     if command -v termux-open-url >/dev/null 2>&1; then
@@ -189,13 +135,34 @@ open_url() {
     return 0
 }
 
-# ─── Discover Hosts ───────────────────────────────────────────────────
-echo -e "${YELLOW}[1/3] Scanning network for devices...${NC}"
-echo -e "${GRAY}       (this may take 15-30 seconds on Wi-Fi)${NC}"
+# ═══════════════════════════════════════════════════════════════════
+#  BANNER
+# ═══════════════════════════════════════════════════════════════════
+clear
+echo ""
+echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║   ${BOLD}${WHITE}📷 CCTV Auto-Finder — Termux (Advanced)${NC}${CYAN}              ║${NC}"
+echo -e "${CYAN}╠══════════════════════════════════════════════════════════╣${NC}"
+echo -e "${CYAN}║${NC}  Interface : ${BOLD}$IFACE${NC}"
+echo -e "${CYAN}║${NC}  Your IP   : ${BOLD}$MY_IP${NC}"
+echo -e "${CYAN}║${NC}  Network   : ${BOLD}$CIDR${NC}"
+echo -e "${CYAN}║${NC}  Gateway   : ${BOLD}$GW_IP${NC}"
+echo -e "${CYAN}║${NC}  Creds     : ${GREEN}${#CRED_PAIRS[@]} username:password pairs loaded${NC}"
+echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+# ═══════════════════════════════════════════════════════════════════
+#  PHASE 1: NETWORK SCAN
+# ═══════════════════════════════════════════════════════════════════
+echo -e "${YELLOW}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${YELLOW}${BOLD}  PHASE 1: NETWORK SCAN${NC}"
+echo -e "${YELLOW}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${GRAY}  Scanning $CIDR for live devices...${NC}"
+echo ""
+
 SCAN="$(nmap -sn -n "$CIDR" 2>/dev/null)"
 mapfile -t RAW_HOSTS < <(printf '%s\n' "$SCAN" | awk '/Nmap scan report for / {print $NF}' | tr -d '()')
 
-# Filter out our own IP and the gateway
 HOSTS=()
 for h in "${RAW_HOSTS[@]}"; do
     [[ "$h" == "$MY_IP" || "$h" == "$GW_IP" ]] && continue
@@ -203,108 +170,205 @@ for h in "${RAW_HOSTS[@]}"; do
 done
 
 if (( ${#HOSTS[@]} == 0 )); then
-    echo -e "${YELLOW}No devices found (other than this phone and the gateway).${NC}"
-    echo "Make sure your phone and cameras are on the same Wi-Fi network."
+    echo -e "${RED}  ✗ No devices found on the network.${NC}"
+    echo "  Make sure you're on the same Wi-Fi as your cameras."
     exit 0
 fi
-echo -e "  ${GREEN}Found ${#HOSTS[@]} device(s):${NC}"
-for h in "${HOSTS[@]}"; do echo "    - $h"; done
+
+echo -e "  ${GREEN}✓ Found ${BOLD}${#HOSTS[@]}${NC}${GREEN} device(s) on network:${NC}"
+echo ""
+for i in "${!HOSTS[@]}"; do
+    echo -e "    ${WHITE}[$((i+1))]${NC} ${HOSTS[$i]}"
+done
 echo ""
 
-# ─── Port-Scan Each Host ─────────────────────────────────────────────
-echo -e "${YELLOW}[2/3] Scanning for camera ports (80, 443, 554, 8080, 8443, 37777)...${NC}"
+# ═══════════════════════════════════════════════════════════════════
+#  PHASE 2: PORT SCAN
+# ═══════════════════════════════════════════════════════════════════
+echo -e "${YELLOW}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${YELLOW}${BOLD}  PHASE 2: PORT SCAN${NC}"
+echo -e "${YELLOW}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${GRAY}  Checking ports: 80, 443, 554, 8080, 8443, 37777${NC}"
+echo ""
+
 declare -A CAMERA_PORTS
 CAMERA_LIST=()
+
 for h in "${HOSTS[@]}"; do
-    printf "  Scanning %s ..." "$h"
+    echo -ne "  Scanning ${WHITE}$h${NC} ..."
     RESULT="$(nmap -n -sT --open -p 80,443,554,8080,8443,37777 "$h" 2>/dev/null)"
     mapfile -t PORTS < <(printf '%s\n' "$RESULT" | awk '/^[0-9]+\/tcp[[:space:]]+open/ {split($1,p,"/"); print p[1]}')
     if (( ${#PORTS[@]} > 0 )); then
-        echo -e " ${GREEN}CAMERA FOUND (ports: $(IFS=,; echo "${PORTS[*]}"))${NC}"
+        PORT_LIST="$(IFS=', '; echo "${PORTS[*]}")"
+        echo -e " ${GREEN}✓ OPEN PORTS: ${BOLD}$PORT_LIST${NC}"
         CAMERA_PORTS["$h"]="${PORTS[*]}"
         CAMERA_LIST+=("$h")
     else
-        echo -e " ${GRAY}no camera ports${NC}"
+        echo -e " ${GRAY}✗ no camera ports${NC}"
     fi
 done
 echo ""
 
 if (( ${#CAMERA_LIST[@]} == 0 )); then
-    echo -e "${YELLOW}No devices with camera web-interface ports found.${NC}"
+    echo -e "${RED}  No devices with camera ports found.${NC}"
     exit 0
 fi
 
-# ─── Build URLs & Open ───────────────────────────────────────────────
-echo -e "${YELLOW}[3/3] Opening camera login pages with auto-credentials...${NC}"
+echo -e "  ${GREEN}✓ ${BOLD}${#CAMERA_LIST[@]}${NC}${GREEN} potential camera(s) found${NC}"
 echo ""
 
-WEB_COUNT=0
+# ═══════════════════════════════════════════════════════════════════
+#  PHASE 3: CREDENTIAL CHECK
+# ═══════════════════════════════════════════════════════════════════
+echo -e "${YELLOW}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${YELLOW}${BOLD}  PHASE 3: CREDENTIAL CHECK${NC}"
+echo -e "${YELLOW}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${GRAY}  Testing ${#CRED_PAIRS[@]} credential pairs against each camera...${NC}"
+echo ""
+
+WORKING_URLS=()
 RTSP_URLS=()
-ALL_WEB_URLS=()
+TOTAL_TESTED=0
+TOTAL_SUCCESS=0
 
 for cam in "${CAMERA_LIST[@]}"; do
-    echo -e "  ${CYAN}📷 Camera: $cam${NC}"
+    echo -e "  ${CYAN}${BOLD}📷 Camera: $cam${NC}"
     read -ra ports <<< "${CAMERA_PORTS[$cam]}"
+
     for port in "${ports[@]}"; do
         if [[ "$port" == "554" ]]; then
-            URL="rtsp://${ENC_USER}:${ENC_PASS}@${cam}:${port}/stream1"
-            echo -e "    ${MAGENTA}🎥 RTSP stream: rtsp://${cam}:${port}${NC}"
-            echo "      Full URL : $URL"
-            RTSP_URLS+=("$URL")
-        elif [[ "$port" == "443" || "$port" == "8443" ]]; then
-            URL="https://${ENC_USER}:${ENC_PASS}@${cam}:${port}"
-            PLAIN="https://${cam}:${port}"
-            echo -e "    ${GREEN}🔐 Web login: $PLAIN  →  credentials embedded${NC}"
-            ALL_WEB_URLS+=("$URL")
-            WEB_COUNT=$((WEB_COUNT + 1))
+            echo -e "    ${MAGENTA}🎥 Port $port (RTSP stream)${NC}"
+            # Test RTSP credentials
+            RTSP_FOUND=false
+            for cred in "${CRED_PAIRS[@]}"; do
+                user="${cred%%:*}"
+                pass="${cred#*:}"
+                enc_u="$(urlencode "$user")"
+                enc_p="$(urlencode "$pass")"
+                RTSP_URL="rtsp://${enc_u}:${enc_p}@${cam}:${port}/stream1"
+                echo -ne "       Testing ${WHITE}${user}:${pass}${NC} ... "
+                TOTAL_TESTED=$((TOTAL_TESTED + 1))
+                # Can't easily test RTSP with curl, just list it
+                echo -e "${YELLOW}listed${NC}"
+                if [[ "$RTSP_FOUND" == "false" ]]; then
+                    RTSP_URLS+=("$RTSP_URL|$user|$pass")
+                    RTSP_FOUND=true
+                fi
+            done
+            continue
+        fi
+
+        # Determine HTTP or HTTPS
+        if [[ "$port" == "443" || "$port" == "8443" ]]; then
+            SCHEME="https"
         else
-            URL="http://${ENC_USER}:${ENC_PASS}@${cam}:${port}"
-            PLAIN="http://${cam}:${port}"
-            echo -e "    ${GREEN}🌐 Web login: $PLAIN  →  credentials embedded${NC}"
-            ALL_WEB_URLS+=("$URL")
-            WEB_COUNT=$((WEB_COUNT + 1))
+            SCHEME="http"
+        fi
+
+        echo -e "    ${GREEN}🌐 Port $port ($SCHEME)${NC}"
+        FOUND_WORKING=false
+
+        for cred in "${CRED_PAIRS[@]}"; do
+            user="${cred%%:*}"
+            pass="${cred#*:}"
+            TOTAL_TESTED=$((TOTAL_TESTED + 1))
+
+            echo -ne "       Testing ${WHITE}${user}:${pass}${NC} ... "
+
+            # Try HTTP Basic Auth with curl
+            HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' \
+                --max-time 5 \
+                --connect-timeout 3 \
+                -u "${user}:${pass}" \
+                -k \
+                "${SCHEME}://${cam}:${port}/" 2>/dev/null || echo "000")"
+
+            if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "301" || "$HTTP_CODE" == "302" || "$HTTP_CODE" == "304" ]]; then
+                echo -e "${GREEN}${BOLD}✓ SUCCESS (HTTP $HTTP_CODE)${NC}"
+                enc_u="$(urlencode "$user")"
+                enc_p="$(urlencode "$pass")"
+                WORKING_URLS+=("${SCHEME}://${enc_u}:${enc_p}@${cam}:${port}|$user|$pass")
+                TOTAL_SUCCESS=$((TOTAL_SUCCESS + 1))
+                FOUND_WORKING=true
+                break  # Found working cred, stop testing this port
+            elif [[ "$HTTP_CODE" == "401" || "$HTTP_CODE" == "403" ]]; then
+                echo -e "${RED}✗ DENIED (HTTP $HTTP_CODE)${NC}"
+            elif [[ "$HTTP_CODE" == "000" ]]; then
+                echo -e "${GRAY}✗ NO RESPONSE${NC}"
+            else
+                echo -e "${YELLOW}? HTTP $HTTP_CODE${NC}"
+            fi
+        done
+
+        if [[ "$FOUND_WORKING" == "false" ]]; then
+            echo -e "       ${RED}${BOLD}✗ No working credentials found for port $port${NC}"
         fi
     done
     echo ""
 done
 
-# Open all web URLs in Android browser
-if (( ${#ALL_WEB_URLS[@]} > 0 )); then
-    if [[ "$HAS_OPEN" == "true" ]]; then
-        echo -e "${GREEN}Opening $WEB_COUNT camera page(s) in your browser...${NC}"
-        for url in "${ALL_WEB_URLS[@]}"; do
-            open_url "$url"
-            sleep 1
-        done
-    else
-        echo -e "${YELLOW}Could not auto-open browser. Install termux-api for auto-open:${NC}"
-        echo "  pkg install termux-api"
+# ═══════════════════════════════════════════════════════════════════
+#  PHASE 4: RESULTS & AUTO-OPEN
+# ═══════════════════════════════════════════════════════════════════
+echo -e "${YELLOW}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${YELLOW}${BOLD}  PHASE 4: RESULTS${NC}"
+echo -e "${YELLOW}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+
+if (( ${#WORKING_URLS[@]} > 0 )); then
+    echo -e "  ${GREEN}${BOLD}✓ WORKING CAMERAS:${NC}"
+    echo ""
+    for entry in "${WORKING_URLS[@]}"; do
+        url="${entry%%|*}"
+        rest="${entry#*|}"
+        user="${rest%%|*}"
+        pass="${rest#*|}"
+        # Extract IP:port from URL
+        plain="$(echo "$url" | sed 's|.*@||')"
+        echo -e "    ${GREEN}📷 ${BOLD}$plain${NC}"
+        echo -e "       Username: ${WHITE}$user${NC}"
+        echo -e "       Password: ${WHITE}$pass${NC}"
+        echo -e "       URL: ${GRAY}$url${NC}"
         echo ""
-        echo "Open these URLs manually in your browser:"
-        for url in "${ALL_WEB_URLS[@]}"; do
-            echo "  $url"
-        done
-    fi
+    done
+
+    echo -e "  ${GREEN}Opening ${#WORKING_URLS[@]} camera(s) in browser...${NC}"
+    for entry in "${WORKING_URLS[@]}"; do
+        url="${entry%%|*}"
+        open_url "$url"
+        sleep 1
+    done
 fi
 
-# RTSP summary
 if (( ${#RTSP_URLS[@]} > 0 )); then
     echo ""
-    echo -e "${MAGENTA}🎥 RTSP streams (open with VLC for Android):${NC}"
-    for u in "${RTSP_URLS[@]}"; do echo "  $u"; done
+    echo -e "  ${MAGENTA}${BOLD}🎥 RTSP STREAMS:${NC}"
+    echo ""
+    for entry in "${RTSP_URLS[@]}"; do
+        url="${entry%%|*}"
+        rest="${entry#*|}"
+        user="${rest%%|*}"
+        pass="${rest#*|}"
+        echo -e "    ${MAGENTA}$url${NC}"
+    done
+    echo -e "    ${GRAY}Open with VLC: pkg install vlc${NC}"
 fi
 
-# ─── Summary ─────────────────────────────────────────────────────────
+if (( ${#WORKING_URLS[@]} == 0 && ${#RTSP_URLS[@]} == 0 )); then
+    echo -e "  ${RED}${BOLD}✗ No working credentials found for any camera.${NC}"
+    echo -e "  ${YELLOW}Add more credentials to: camera_credentials.txt${NC}"
+    echo -e "  ${YELLOW}Format: username:password (one per line)${NC}"
+fi
+
+# ─── Summary ─────────────────────────────────────────────────────
 echo ""
-echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
-echo -e "  ${GREEN}${BOLD}Scan complete!${NC}"
-echo -e "  📷 Cameras found : ${BOLD}${#CAMERA_LIST[@]}${NC}"
-echo -e "  🌐 URLs opened   : ${BOLD}$WEB_COUNT${NC}"
-echo -e "  🎥 RTSP streams  : ${BOLD}${#RTSP_URLS[@]}${NC}"
-echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║  ${BOLD}${WHITE}SCAN COMPLETE${NC}${CYAN}                                            ║${NC}"
+echo -e "${CYAN}╠══════════════════════════════════════════════════════════╣${NC}"
+echo -e "${CYAN}║${NC}  📡 Devices scanned   : ${BOLD}${#HOSTS[@]}${NC}"
+echo -e "${CYAN}║${NC}  📷 Cameras found     : ${BOLD}${#CAMERA_LIST[@]}${NC}"
+echo -e "${CYAN}║${NC}  🔑 Credentials tested: ${BOLD}$TOTAL_TESTED${NC}"
+echo -e "${CYAN}║${NC}  ✅ Successful logins : ${BOLD}${GREEN}$TOTAL_SUCCESS${NC}"
+echo -e "${CYAN}║${NC}  🎥 RTSP streams      : ${BOLD}${#RTSP_URLS[@]}${NC}"
+echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo "Credentials are embedded as http://user:pass@IP:port."
-echo "Most cameras using HTTP Basic Auth will log in automatically."
-echo ""
-echo -e "${GRAY}Tip: For RTSP streams, install VLC: pkg install vlc${NC}"
-echo -e "${GRAY}     Play with: cvlc rtsp://user:pass@IP:554/stream1${NC}"

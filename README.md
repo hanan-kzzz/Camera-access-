@@ -1,6 +1,6 @@
 # 📷 CCTV Auto-Finder (Advanced Mode)
 
-A fully automatic network scanner that discovers IP cameras and NVRs on your local network, checks web-interface ports, and opens login pages with your credentials pre-filled — **no manual selection needed**.
+A fully automatic network scanner that discovers IP cameras and NVRs on your local network, scans ports, **tests multiple username:password credentials**, and opens working cameras in your browser — all hands-free.
 
 Works on **Windows**, **Ubuntu/Linux**, and **Termux (Android)**.
 
@@ -8,11 +8,11 @@ Works on **Windows**, **Ubuntu/Linux**, and **Termux (Android)**.
 
 ## ✨ Features
 
-- 🔍 **Fully automatic** — scans your entire LAN, finds all cameras, and opens every login page
-- 🔑 **Auto-login** — embeds your username & password into the URL so cameras log in instantly
-- 🎥 **RTSP detection** — finds video streams (port 554) with ready-to-use VLC URLs
-- 🛡️ **Smart filtering** — skips your own machine and gateway, only shows real devices
-- 📡 **Extended port scanning** — checks ports 80, 443, 554, 8080, 8443, and 37777 (Dahua)
+- 🔍 **Phase 1 — Network Scan** — discovers all live devices on your LAN
+- 📡 **Phase 2 — Port Scan** — checks each device for camera ports (80, 443, 554, 8080, 8443, 37777)
+- 🔑 **Phase 3 — Credential Check** — tests every `username:password` pair against each camera, shows ✓ SUCCESS or ✗ DENIED for each attempt
+- 🌐 **Phase 4 — Auto-Open** — opens all working cameras in your browser with credentials pre-filled
+- 🎥 **RTSP detection** — finds video streams with ready-to-use VLC URLs
 - 📱 **Cross-platform** — dedicated scripts for Windows, Ubuntu/Linux, and Termux (Android)
 
 ---
@@ -28,24 +28,27 @@ cd Camera-access-
 
 ### Step 2: Set Up Credentials
 
-Copy the example file and fill in your camera username and password:
-
-```bash
-cp camera_credentials.example.txt camera_credentials.txt
-```
-
-Edit `camera_credentials.txt`:
+Edit `camera_credentials.txt` — add as many `username:password` pairs as you want, **one per line**:
 
 ```
-username=admin
-password=YourCameraPassword
+admin:admin
+admin:12345
+admin:password
+admin:123456
+admin:admin123
+root:root
+root:admin
+admin:
+user:user
+admin:888888
+admin:666666
 ```
 
-> ⚠️ **Note:** `camera_credentials.txt` is git-ignored and will never be committed to the repo.
+> 💡 The scanner tries **every pair** against each camera and shows you which one works.
+>
+> ⚠️ `camera_credentials.txt` is git-ignored and will never be committed.
 
 ### Step 3: Run the Scanner
-
-Choose the right script for your platform:
 
 <details>
 <summary><b>🪟 Windows</b></summary>
@@ -68,7 +71,7 @@ powershell -ExecutionPolicy Bypass -File cctv_finder_windows.ps1
 
 **Install dependencies:**
 ```bash
-sudo apt update && sudo apt install nmap iproute2 xdg-utils
+sudo apt update && sudo apt install nmap iproute2 curl xdg-utils
 ```
 
 **Run:**
@@ -81,7 +84,7 @@ chmod +x cctv_finder_ubuntu.sh
 <details>
 <summary><b>📱 Termux (Android)</b></summary>
 
-**One-time setup** (installs nmap, net-tools, termux-api automatically):
+**One-time setup** (installs nmap, net-tools, curl, termux-api automatically):
 ```bash
 chmod +x setup_termux.sh
 ./setup_termux.sh
@@ -89,7 +92,7 @@ chmod +x setup_termux.sh
 
 Or install manually:
 ```bash
-pkg update && pkg install nmap net-tools termux-api
+pkg update && pkg install nmap net-tools curl termux-api
 ```
 
 **Run:**
@@ -98,7 +101,7 @@ chmod +x cctv_finder_termux.sh
 ./cctv_finder_termux.sh
 ```
 
-> 💡 **Tip:** Make sure your phone is connected to the **same Wi-Fi** network as your cameras.
+> 💡 Make sure your phone is on the **same Wi-Fi** as your cameras.
 
 </details>
 
@@ -107,20 +110,25 @@ chmod +x cctv_finder_termux.sh
 ## ⚙️ How It Works
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  Step 1: Network Discovery                          │
-│  Scans your entire LAN subnet using Nmap            │
-│  Skips your own device and the gateway               │
-├─────────────────────────────────────────────────────┤
-│  Step 2: Port Scanning                              │
-│  Checks each device for camera ports:               │
-│  80, 443, 554 (RTSP), 8080, 8443, 37777 (Dahua)    │
-├─────────────────────────────────────────────────────┤
-│  Step 3: Auto-Login                                 │
-│  Opens camera login pages in your browser with      │
-│  credentials embedded: http://user:pass@IP:port     │
-│  Lists RTSP streams for VLC playback                │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  PHASE 1: NETWORK SCAN                                   │
+│  Discovers all live devices on your LAN using Nmap        │
+│  Filters out your own IP and the gateway                  │
+├──────────────────────────────────────────────────────────┤
+│  PHASE 2: PORT SCAN                                      │
+│  Checks each device for camera web-interface ports:       │
+│  80, 443, 554 (RTSP), 8080, 8443, 37777 (Dahua)         │
+├──────────────────────────────────────────────────────────┤
+│  PHASE 3: CREDENTIAL CHECK                               │
+│  Tests every username:password pair from your list        │
+│  Shows ✓ SUCCESS or ✗ DENIED for each attempt            │
+│  Stops on first working credential per port               │
+├──────────────────────────────────────────────────────────┤
+│  PHASE 4: RESULTS & AUTO-OPEN                            │
+│  Opens all working cameras in your browser                │
+│  Lists RTSP streams for VLC playback                      │
+│  Shows summary with total tested/success count            │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -128,69 +136,126 @@ chmod +x cctv_finder_termux.sh
 ## 🖥️ Example Output
 
 ```
-╔══════════════════════════════════════════════════════╗
-║       CCTV Auto-Finder  (Advanced Mode)             ║
-╚══════════════════════════════════════════════════════╝
-  Interface : Wi-Fi
-  Your IP   : 192.168.1.100
-  Network   : 192.168.1.0/24
-  Credentials loaded from camera_credentials.txt
+╔══════════════════════════════════════════════════════════╗
+║   📷 CCTV Auto-Finder — Termux (Advanced)              ║
+╠══════════════════════════════════════════════════════════╣
+║  Interface : wlan0
+║  Your IP   : 192.168.1.100
+║  Network   : 192.168.1.0/24
+║  Creds     : 11 username:password pairs loaded
+╚══════════════════════════════════════════════════════════╝
 
-[1/3] Scanning network for devices...
-  Found 5 device(s):
-    - 192.168.1.10
-    - 192.168.1.20
-    - 192.168.1.30
-    - 192.168.1.50
-    - 192.168.1.64
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 1: NETWORK SCAN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓ Found 5 device(s):
+    [1] 192.168.1.10
+    [2] 192.168.1.20
+    [3] 192.168.1.30
+    [4] 192.168.1.50
+    [5] 192.168.1.64
 
-[2/3] Scanning for camera ports (80, 443, 554, 8080, 8443, 37777)...
-  Scanning 192.168.1.10 ... CAMERA FOUND (ports: 80, 554)
-  Scanning 192.168.1.20 ... CAMERA FOUND (ports: 80, 443)
-  Scanning 192.168.1.30 ... no camera ports
-  Scanning 192.168.1.50 ... no camera ports
-  Scanning 192.168.1.64 ... CAMERA FOUND (ports: 37777, 80)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 2: PORT SCAN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Scanning 192.168.1.10 ... ✓ OPEN PORTS: 80, 554
+  Scanning 192.168.1.20 ... ✓ OPEN PORTS: 80, 443
+  Scanning 192.168.1.30 ... ✗ no camera ports
+  Scanning 192.168.1.50 ... ✗ no camera ports
+  Scanning 192.168.1.64 ... ✓ OPEN PORTS: 80, 37777
 
-[3/3] Opening camera login pages with auto-credentials...
-
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 3: CREDENTIAL CHECK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   📷 Camera: 192.168.1.10
-    🌐 Web login  : http://192.168.1.10:80   →  credentials embedded
-    🎥 RTSP stream: rtsp://192.168.1.10:554
+    🌐 Port 80 (http)
+       Testing admin:admin ... ✗ DENIED (HTTP 401)
+       Testing admin:12345 ... ✗ DENIED (HTTP 401)
+       Testing admin:password ... ✓ SUCCESS (HTTP 200)
+    🎥 Port 554 (RTSP stream)
+       Testing admin:password ... listed
 
   📷 Camera: 192.168.1.20
-    🌐 Web login  : http://192.168.1.20:80   →  credentials embedded
-    🔐 Web login  : https://192.168.1.20:443 →  credentials embedded
+    🌐 Port 80 (http)
+       Testing admin:admin ... ✓ SUCCESS (HTTP 200)
+    🔐 Port 443 (https)
+       Testing admin:admin ... ✓ SUCCESS (HTTP 200)
 
   📷 Camera: 192.168.1.64
-    🌐 Web login  : http://192.168.1.64:80   →  credentials embedded
+    🌐 Port 80 (http)
+       Testing admin:admin ... ✗ DENIED (HTTP 401)
+       Testing admin:12345 ... ✗ DENIED (HTTP 401)
+       Testing admin:password ... ✗ DENIED (HTTP 401)
+       Testing admin:123456 ... ✗ DENIED (HTTP 401)
+       Testing admin:admin123 ... ✗ DENIED (HTTP 401)
+       Testing root:root ... ✗ DENIED (HTTP 401)
+       Testing root:admin ... ✗ DENIED (HTTP 401)
+       Testing admin: ... ✗ DENIED (HTTP 401)
+       Testing user:user ... ✗ DENIED (HTTP 401)
+       Testing admin:888888 ... ✓ SUCCESS (HTTP 200)
 
-Opening 4 camera login page(s) in your browser...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 4: RESULTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🎥 RTSP streams (open with VLC):
-  rtsp://admin:admin@192.168.1.10:554/stream1
+  ✓ WORKING CAMERAS:
 
-═══════════════════════════════════════════════════════
-  Scan complete!
-  📷 Cameras found : 3
-  🌐 URLs opened   : 4
-  🎥 RTSP streams  : 1
-═══════════════════════════════════════════════════════
+    📷 192.168.1.10:80
+       Username: admin
+       Password: password
+
+    📷 192.168.1.20:80
+       Username: admin
+       Password: admin
+
+    📷 192.168.1.64:80
+       Username: admin
+       Password: 888888
+
+  Opening 3 camera(s) in browser...
+
+  🎥 RTSP STREAMS:
+    rtsp://admin:password@192.168.1.10:554/stream1
+
+╔══════════════════════════════════════════════════════════╗
+║  SCAN COMPLETE                                           ║
+╠══════════════════════════════════════════════════════════╣
+║  📡 Devices scanned   : 5
+║  📷 Cameras found     : 3
+║  🔑 Credentials tested: 25
+║  ✅ Successful logins : 3
+║  🎥 RTSP streams      : 1
+╚══════════════════════════════════════════════════════════╝
 ```
 
 ---
 
-## 🔑 How Auto-Login Works
+## 🔑 Adding More Credentials
 
-Credentials are embedded in the URL using the standard `http://user:pass@host:port` format.
+Edit `camera_credentials.txt` anytime — add as many pairs as you need:
 
-| Works Automatically ✅ | Needs Manual Login ⚠️ |
-|------------------------|----------------------|
-| HTTP Basic Auth cameras | Custom HTML login forms |
-| Hikvision, Dahua, Reolink | Some newer web UIs |
-| Amcrest, Foscam, TP-Link | Cloud-based cameras |
-| Most NVR/DVR web panels | Two-factor auth cameras |
+```
+# Common defaults
+admin:admin
+admin:12345
+admin:password
+admin:123456
 
-For cameras with custom login forms, the browser opens the page and your credentials are saved in `camera_credentials.txt` for easy copy-paste.
+# Brand-specific defaults
+admin:888888       # Dahua
+admin:666666       # Dahua
+admin:1111111      # Hikvision
+admin:hikadmin     # Hikvision
+
+# Custom passwords
+admin:MyCamera2024
+operator:op123
+
+# Empty password
+admin:
+```
+
+The format is `username:password` — one per line. Lines starting with `#` are ignored.
 
 ---
 
@@ -198,51 +263,36 @@ For cameras with custom login forms, the browser opens the page and your credent
 
 | File | Platform | Description |
 |------|----------|-------------|
-| `cctv_finder_windows.ps1` | 🪟 Windows | Main PowerShell scanner script |
-| `cctv_finder_windows.bat` | 🪟 Windows | Double-click launcher for the PS1 script |
-| `cctv_finder_ubuntu.sh` | 🐧 Ubuntu/Linux | Main Bash scanner script |
-| `cctv_finder_termux.sh` | 📱 Android | Termux-optimized scanner with Android-specific features |
-| `setup_termux.sh` | 📱 Android | One-time setup script (installs all dependencies) |
-| `camera_credentials.txt` | All | Your credentials — **git-ignored**, never committed |
-| `camera_credentials.example.txt` | All | Template file — copy to `camera_credentials.txt` |
+| `cctv_finder_windows.ps1` | 🪟 Windows | Main PowerShell scanner |
+| `cctv_finder_windows.bat` | 🪟 Windows | Double-click launcher |
+| `cctv_finder_ubuntu.sh` | 🐧 Ubuntu/Linux | Main Bash scanner |
+| `cctv_finder_termux.sh` | 📱 Android | Termux-optimized scanner |
+| `setup_termux.sh` | 📱 Android | One-time setup (installs deps) |
+| `camera_credentials.txt` | All | Your credential list — **git-ignored** |
+| `camera_credentials.example.txt` | All | Template — copy to `camera_credentials.txt` |
 
 ---
 
-## 📱 Termux-Specific Features
-
-The Termux script is specially built for Android with:
-
-- 📦 **Auto-installs dependencies** — detects missing packages and installs via `pkg`
-- 📶 **Multiple network detection** — tries `ip` → `ifconfig` → `getprop` → manual input
-- 🌐 **Android browser opening** — uses `termux-open-url` → `am start` → `xdg-open`
-- 📡 **Wi-Fi aware** — defaults to `wlan0` interface (Android standard)
-- 🎨 **Colored output** — emoji + ANSI colors for easy reading on small screens
-- ✏️ **Auto-creates credentials** — generates `camera_credentials.txt` if missing
-
----
-
-## 📋 Requirements Summary
+## 📋 Requirements
 
 | Platform | Required | Optional |
 |----------|----------|----------|
 | 🪟 Windows | PowerShell 5+, [Nmap](https://nmap.org/download.html) | — |
-| 🐧 Ubuntu/Linux | `bash`, `nmap`, `iproute2` | `xdg-utils` (auto-open browser) |
-| 📱 Termux | `nmap`, `net-tools` | `termux-api` (auto-open browser) |
+| 🐧 Ubuntu/Linux | `bash`, `nmap`, `iproute2`, `curl` | `xdg-utils` (auto-open browser) |
+| 📱 Termux | `nmap`, `net-tools`, `curl` | `termux-api` (auto-open browser) |
 
 ---
 
 ## 🔒 Security Notes
 
 - `camera_credentials.txt` is in `.gitignore` — it will **never** be committed
-- Credentials in URLs may appear in browser history — clear history if needed
+- Credentials in URLs may appear in browser history — clear after use if needed
 - Special characters in passwords are URL-encoded automatically
 - This tool is intended for accessing **your own** cameras on **your own** network
 
 ---
 
 ## 🎥 Playing RTSP Streams
-
-The scanner detects RTSP streams on port 554. To watch them:
 
 **Desktop (VLC):**
 ```bash
